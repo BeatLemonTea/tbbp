@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>淘宝链接生成器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        h1, h2 {
+            color: #ff6600;
+            text-align: center;
+        }
+        select, input, button {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #ff6600;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #e55c00;
+        }
+        #result, #instructions, #feedback {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .hidden {
+            display: none;
+        }
+        .warning {
+            color: red;
+            font-weight: bold;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>淘宝链接生成器</h1>
+    <select id="linkType" onchange="updateFields()">
+        <option value="coupon">优惠券/单一商品</option>
+        <option value="attribute">带属性商品</option>
+        <option value="juhuasuan">聚划算百亿补贴</option>
+        <option value="presale">预售定金</option>
+    </select>
+    <input type="text" id="originalLink" placeholder="粘贴原始链接">
+    <button onclick="parseLink()">识别链接</button>
+    <input type="text" id="id" placeholder="商品ID (必填)">
+    <input type="text" id="skuid" placeholder="SKUID">
+    <input type="text" id="quantity" placeholder="数量">
+    <button onclick="generateLink()">生成链接</button>
+    <div id="result"></div>
+    <button onclick="copyLink()" id="copyButton" style="display:none;">复制链接</button>
+    <div id="instructions"></div>
+    <div id="feedback"></div>
+
+    <script>
+        function updateFields() {
+            var linkType = document.getElementById('linkType').value;
+            var skuidField = document.getElementById('skuid');
+            var quantityField = document.getElementById('quantity');
+            var instructions = document.getElementById('instructions');
+            
+            skuidField.classList.remove('hidden');
+            quantityField.classList.remove('hidden');
+            
+            switch(linkType) {
+                case 'attribute':
+                    instructions.innerHTML = "<h2>注意事项</h2><p>请确保选择了所有必要的属性后再获取SKUID。不同属性对应不同的SKUID。</p><p class='warning'>如果抢购时提示需要手动选择属性，很可能是SKUID配置不正确！</p>";
+                    break;
+                case 'coupon':
+                    skuidField.classList.add('hidden');
+                    quantityField.classList.add('hidden');
+                    instructions.innerHTML = "<h2>获取商品ID</h2><p>对于短链接（如https://m.tb.cn/h.4wFpqZj?sm=0f5904），请在浏览器中打开以获取完整链接和商品ID。</p>";
+                    break;
+                case 'juhuasuan':
+                    instructions.innerHTML = "<h2>聚划算链接说明</h2><p>有些百亿补贴商品可能没有SKUID。如果没有，生成的链接将自动调整格式。</p>";
+                    break;
+                case 'presale':
+                    instructions.innerHTML = "<h2>预售商品说明</h2><p>请确保填写正确的商品ID、SKUID和数量。</p>";
+                    break;
+            }
+        }
+
+        function parseLink() {
+            var originalLink = document.getElementById('originalLink').value;
+            var linkType = document.getElementById('linkType').value;
+            var feedbackDiv = document.getElementById('feedback');
+            
+            var idMatch = originalLink.match(/[?&]id=(\d+)/) || originalLink.match(/[?&]itemId=(\d+)/);
+            var skuIdMatch = originalLink.match(/[?&]skuId=(\d+)/);
+            var quantityMatch = originalLink.match(/[?&]quantity=(\d+)/);
+
+            if (idMatch) document.getElementById('id').value = idMatch[1];
+            if (skuIdMatch) document.getElementById('skuid').value = skuIdMatch[1];
+            if (quantityMatch) document.getElementById('quantity').value = quantityMatch[1];
+
+            var feedback = "";
+            if (!idMatch) {
+                feedback += "<p class='warning'>警告：无法识别商品ID，请检查链接是否正确或手动输入ID。</p>";
+            } else {
+                feedback += "<p class='success'>成功：已识别商品ID。</p>";
+            }
+
+            if (linkType === 'coupon' && skuIdMatch) {
+                feedback += "<p class='warning'>警告：检测到SKUID，但优惠券/单一商品通常不需要SKUID。请确认您选择了正确的链接类型。</p>";
+            }
+
+            if ((linkType === 'attribute' || linkType === 'presale') && !skuIdMatch) {
+                feedback += "<p class='warning'>警告：未检测到SKUID，但带属性商品和预售商品通常需要SKUID。请确认您选择了正确的链接类型或手动输入SKUID。</p>";
+            }
+
+            feedbackDiv.innerHTML = feedback;
+        }
+
+        function generateLink() {
+            var linkType = document.getElementById('linkType').value;
+            var id = document.getElementById('id').value;
+            var skuid = document.getElementById('skuid').value;
+            var quantity = document.getElementById('quantity').value || '1';
+            var feedbackDiv = document.getElementById('feedback');
+
+            if (!id) {
+                feedbackDiv.innerHTML = "<p class='warning'>错误：请输入商品ID</p>";
+                return;
+            }
+
+            var link;
+            var feedback = "";
+
+            switch (linkType) {
+                case 'coupon':
+                    if (skuid) {
+                        feedback += "<p class='warning'>警告：优惠券/单一商品不应该有SKUID，但仍然生成了链接。请确认链接类型是否正确。</p>";
+                    }
+                    link = `https://h5.m.taobao.com/cart/order.html?itemId=${id}`;
+                    break;
+                case 'attribute':
+                    if (!skuid) {
+                        feedback += "<p class='warning'>警告：带属性商品通常需要SKUID。请确认是否遗漏了SKUID。</p>";
+                    }
+                    link = `https://h5.m.taobao.com/cart/order.html?buyParam=${id}_${quantity}_${skuid}`;
+                    break;
+                case 'juhuasuan':
+                    link = skuid 
+                        ? `https://h5.m.taobao.com/awp/core/detail.htm?id=${id}&skuId=${skuid}&umpChannel=bybtqdyh&u_channel=bybtqdyh`
+                        : `https://h5.m.taobao.com/awp/core/detail.htm?id=${id}&umpChannel=bybtqdyh&u_channel=bybtqdyh`;
+                    break;
+                case 'presale':
+                    if (!skuid) {
+                        feedback += "<p class='warning'>警告：预售商品通常需要SKUID。请确认是否遗漏了SKUID。</p>";
+                    }
+                    link = `https://h5.m.taobao.com/cart/order.html?itemId=${id}&item_num_id=${id}&skuId=${skuid}&_input_charset=utf-8&buyNow=true&quantity=${quantity}`;
+                    break;
+            }
+
+            document.getElementById('result').innerHTML = '<strong>生成的链接:</strong><br>' + link;
+            document.getElementById('copyButton').style.display = 'block';
+            feedbackDiv.innerHTML += feedback;
+        }
+
+        function copyLink() {
+            var linkText = document.getElementById('result').innerText.split('\n')[1];
+            navigator.clipboard.writeText(linkText).then(function() {
+                document.getElementById('feedback').innerHTML += "<p class='success'>链接已成功复制到剪贴板</p>";
+            }, function(err) {
+                document.getElementById('feedback').innerHTML += "<p class='warning'>无法复制链接: " + err + "</p>";
+            });
+        }
+
+        // 初始化页面时调用一次
+        updateFields();
+    </script>
+</body>
+</html>
